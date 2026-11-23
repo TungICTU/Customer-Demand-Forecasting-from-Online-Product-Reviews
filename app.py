@@ -1,1756 +1,764 @@
-
-"""Customer Demand Forecasting from Online Product Reviews.
-
-Figma-inspired Streamlit analytics dashboard.
-
-Pages:
-1. Demand Forecasting
-2. Reviews & Sentiment
-3. Model Results
-4. About
-
-Run:
-    streamlit run app.py
-"""
-
 import json
-import os
-import html
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
-from plotly.subplots import make_subplots
 
-
-# ============================================================
-# 1. CONFIGURATION
-# ============================================================
-
-DATA = Path(
-    os.environ.get(
-        "APP_DATA",
-        Path(__file__).parent / "app_data"
-    )
-)
-
+# =============================================================================
+# 1. CẤU HÌNH TRANG & DESIGN SYSTEM (CUSTOM CSS)
+# =============================================================================
 st.set_page_config(
-    page_title="DemandLens | AI Demand Intelligence",
-    page_icon="📊",
+    page_title="DemandPulse AI — Dự báo nhu cầu tiêu dùng (NLP & Deep Learning)",
+    page_icon="📈",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
 )
 
-# Design tokens
-PRIMARY = "#635BFF"
-SECONDARY = "#8B85FF"
-DARK = "#19233B"
-MUTED = "#77839A"
-GREEN = "#10B981"
-RED = "#F16D86"
-ORANGE = "#F4A65B"
-GREY = "#94A3B8"
-
-ASPECT_NAMES = {
-    "asp_quality": "Quality",
-    "asp_durability": "Durability",
-    "asp_value": "Value for money",
-    "asp_shipping": "Shipping",
-    "asp_usability": "Ease of use",
-    "asp_compatibility": "Compatibility",
-    "asp_gift": "Gift"
-}
-
-
-# ============================================================
-# 2. FIGMA-INSPIRED DESIGN SYSTEM
-# ============================================================
-
-st.markdown("""
+CUSTOM_CSS = """
 <style>
-@import url(
-    'https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap'
-);
-
-:root {
-    --primary: #635BFF;
-    --primary-light: #EEEDFF;
-    --background: #F7F8FC;
-    --surface: #FFFFFF;
-    --text: #19233B;
-    --muted: #77839A;
-    --border: #E6EAF2;
-    --success: #10B981;
-}
-
-/* Global */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 html, body, [class*="css"] {
-    font-family: 'DM Sans', sans-serif;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 .stApp {
-    background: var(--background);
-    color: var(--text);
-}
-
-header[data-testid="stHeader"] {
-    background: transparent;
+    background-color: #F8FAFC;
+    color: #0F172A;
 }
 
 .block-container {
-    max-width: 1500px;
-    padding-top: 2rem;
-    padding-bottom: 4rem;
-    padding-left: 2.5rem;
-    padding-right: 2.5rem;
-}
-
-h1, h2, h3, h4 {
-    font-family: 'Plus Jakarta Sans', sans-serif;
-    color: var(--text);
-    letter-spacing: -0.035em;
+    padding-top: 1.5rem;
+    padding-bottom: 2.5rem;
+    max-width: 1320px;
 }
 
 /* Sidebar */
-
 section[data-testid="stSidebar"] {
-    background: #FFFFFF;
-    border-right: 1px solid var(--border);
+    background-color: #FFFFFF;
+    border-right: 1px solid #E2E8F0;
 }
 
-section[data-testid="stSidebar"] > div {
-    padding-top: 1.5rem;
+/* Hero Header */
+.hero-box {
+    background: linear-gradient(135deg, #0F172A 0%, #1E1B4B 60%, #312E81 100%);
+    color: #FFFFFF;
+    padding: 1.5rem 1.75rem;
+    border-radius: 16px;
+    margin-bottom: 1.25rem;
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
 }
-
-[data-testid="stSidebar"] [role="radiogroup"] label {
-    padding: 9px 11px;
-    border-radius: 10px;
-    margin-bottom: 4px;
-    transition: background 0.2s ease;
-}
-
-[data-testid="stSidebar"] [role="radiogroup"] label:hover {
-    background: #F4F3FF;
-}
-
-[data-testid="stSidebar"] [role="radiogroup"]
-label:has(input:checked) {
-    background: var(--primary-light);
-    color: #514BD3;
-}
-
-/* Brand */
-
-.brand-box {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 6px 0 22px;
-}
-
-.brand-icon {
-    width: 44px;
-    height: 44px;
-    border-radius: 13px;
-    background: linear-gradient(
-        135deg, #635BFF, #9E85FF
-    );
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 25px;
-    color: white;
-}
-
-.brand-name {
-    font-family: 'Plus Jakarta Sans', sans-serif;
-    font-weight: 800;
-    font-size: 22px;
-    color: #19233B;
-    letter-spacing: -0.05em;
-}
-
-.brand-caption {
-    font-size: 10px;
-    font-weight: 800;
-    color: #91A0B5;
-    letter-spacing: 1.4px;
-}
-
-/* Page header */
-
-.page-eyebrow {
-    color: #635BFF;
-    font-size: 12px;
-    font-weight: 800;
-    letter-spacing: 2px;
+.hero-badge {
+    display: inline-block;
+    background: rgba(129, 140, 248, 0.22);
+    color: #C7D2FE;
+    border: 1px solid rgba(165, 180, 252, 0.35);
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
     text-transform: uppercase;
-    margin-bottom: 10px;
-}
-
-.page-title {
-    color: #19233B;
-    font-family: 'Plus Jakarta Sans', sans-serif;
-    font-size: 33px;
-    font-weight: 800;
-    letter-spacing: -1.3px;
-    margin-bottom: 7px;
-    line-height: 1.3;
-}
-
-.page-subtitle {
-    color: #77839A;
-    font-size: 14px;
-    margin-bottom: 28px;
-}
-
-/* Product panel */
-
-.product-panel {
-    background: linear-gradient(
-        110deg, #FFFFFF, #F7F6FF
-    );
-    border: 1px solid var(--border);
-    border-radius: 18px;
-    padding: 22px 25px;
-    margin-bottom: 25px;
-}
-
-.product-title {
-    font-family: 'Plus Jakarta Sans', sans-serif;
-    font-size: 18px;
-    font-weight: 800;
-    color: #19233B;
     margin-bottom: 8px;
 }
-
-.product-details {
-    font-size: 13px;
-    color: #77839A;
-}
-
-/* KPI metric cards */
-
-[data-testid="stMetric"] {
-    background: white;
-    border: 1px solid var(--border);
-    border-radius: 18px;
-    padding: 22px;
-    min-height: 125px;
-    box-shadow: 0 6px 25px rgba(30, 43, 76, 0.04);
-    transition: transform 0.2s ease,
-                box-shadow 0.2s ease;
-}
-
-[data-testid="stMetric"]:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 10px 30px rgba(30, 43, 76, 0.08);
-}
-
-[data-testid="stMetricLabel"] {
-    font-size: 13px;
-    color: #77839A;
-    font-weight: 600;
-}
-
-[data-testid="stMetricValue"] {
-    font-family: 'Plus Jakarta Sans', sans-serif;
-    color: #19233B;
-    font-size: 26px;
-    font-weight: 800;
-    letter-spacing: -0.5px;
-}
-
-/* Plotly containers */
-
-[data-testid="stPlotlyChart"] {
-    background: #FFFFFF;
-    border: 1px solid var(--border);
-    border-radius: 18px;
-    padding: 12px;
-    box-shadow: 0 6px 24px rgba(30, 43, 76, 0.035);
-    overflow: hidden;
-}
-
-/* Form widgets */
-
-[data-baseweb="select"] > div {
-    border-radius: 11px;
-    background: white;
-}
-
-[data-baseweb="input"] > div {
-    border-radius: 11px;
-    background: white;
-}
-
-.stButton > button {
-    border-radius: 11px;
+.hero-title {
+    font-size: 1.45rem;
     font-weight: 700;
-    transition: 0.2s;
+    margin: 0 0 6px 0;
+    line-height: 1.3;
+}
+.hero-sub {
+    font-size: 0.875rem;
+    color: #CBD5E1;
+    margin: 0;
+    line-height: 1.55;
 }
 
-.stButton > button[kind="primary"] {
-    background: #635BFF;
-    color: white;
-    border: 0;
-}
-
-.stButton > button[kind="primary"]:hover {
-    background: #514BD3;
-}
-
-/* Tables */
-
-[data-testid="stDataFrame"] {
+/* KPI Cards */
+.kpi-card {
     background: #FFFFFF;
-    border: 1px solid var(--border);
+    border: 1px solid #E2E8F0;
     border-radius: 14px;
-    overflow: hidden;
+    padding: 1rem 1.15rem;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    height: 100%;
+}
+.kpi-card.accent {
+    border-color: #C7D2FE;
+    background: linear-gradient(180deg, #FFFFFF 0%, #EEF2FF 100%);
+}
+.kpi-card.success {
+    border-color: #A7F3D0;
+    background: linear-gradient(180deg, #FFFFFF 0%, #ECFDF5 100%);
+}
+.kpi-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #64748B;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+.kpi-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.65rem;
+    font-weight: 700;
+    color: #0F172A;
+    margin: 6px 0 4px 0;
+    line-height: 1.15;
+}
+.kpi-sub {
+    font-size: 0.78rem;
+    color: #475569;
 }
 
-/* Expanders */
-
-[data-testid="stExpander"] {
-    background: white;
-    border: 1px solid var(--border);
+/* Section Card */
+.section-card {
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
     border-radius: 14px;
+    padding: 1.1rem 1.25rem;
+    margin-bottom: 1rem;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
 }
 
 /* Tabs */
-
 .stTabs [data-baseweb="tab-list"] {
-    background: white;
-    border: 1px solid var(--border);
-    border-radius: 13px;
-    padding: 5px;
-    gap: 6px;
+    gap: 8px;
+    background: #FFFFFF;
+    padding: 6px;
+    border-radius: 12px;
+    border: 1px solid #E2E8F0;
 }
-
 .stTabs [data-baseweb="tab"] {
-    border-radius: 9px;
-    font-weight: 700;
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: #475569;
 }
-
 .stTabs [aria-selected="true"] {
-    background: #EEEDFF;
-    color: #635BFF;
+    background-color: #4F46E5 !important;
+    color: #FFFFFF !important;
 }
 
-/* Section headings */
-
-.section-heading {
-    font-family: 'Plus Jakarta Sans', sans-serif;
-    font-size: 19px;
-    font-weight: 800;
-    color: #19233B;
-    margin-top: 25px;
-    margin-bottom: 14px;
+/* Review Card */
+.rev-card {
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 12px;
+    padding: 0.9rem 1rem;
+    margin-bottom: 0.75rem;
 }
-
-/* Pipeline cards */
-
-.pipeline-card {
-    background: white;
-    border: 1px solid #E6EAF2;
-    border-radius: 16px;
-    padding: 24px;
-    min-height: 195px;
-    margin-bottom: 12px;
+.rev-card.pos { border-left: 4px solid #059669; }
+.rev-card.neg { border-left: 4px solid #E11D48; }
+.rev-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.75rem;
+    color: #64748B;
+    margin-bottom: 6px;
 }
-
-.pipeline-icon {
-    font-size: 29px;
-    margin-bottom: 12px;
+.rev-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 999px;
 }
-
-.pipeline-title {
-    font-weight: 800;
-    font-size: 16px;
-    color: #19233B;
+.rev-badge.pos { background: #ECFDF5; color: #047857; }
+.rev-badge.neg { background: #FFF1F2; color: #BE123C; }
+.rev-title {
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: #0F172A;
+    margin-bottom: 4px;
+}
+.rev-text {
+    font-size: 0.82rem;
+    color: #334155;
+    line-height: 1.5;
     margin-bottom: 8px;
 }
-
-.pipeline-description {
-    color: #77839A;
-    font-size: 13px;
-    line-height: 1.7;
-}
-
-/* Captions */
-
-[data-testid="stCaptionContainer"] {
-    color: #77839A;
-}
-
-/* Mobile */
-
-@media (max-width: 950px) {
-    .block-container {
-        padding-left: 1rem;
-        padding-right: 1rem;
-        padding-top: 1rem;
-    }
-
-    .page-title {
-        font-size: 25px;
-    }
-
-    [data-testid="stMetric"] {
-        padding: 15px;
-        min-height: 95px;
-    }
-
-    [data-testid="stMetricValue"] {
-        font-size: 20px;
-    }
-
-    .product-panel {
-        padding: 17px;
-    }
+.asp-chip {
+    display: inline-block;
+    background: #F1F5F9;
+    color: #334155;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    padding: 2px 7px;
+    border-radius: 6px;
+    margin-right: 4px;
 }
 </style>
-""", unsafe_allow_html=True)
+"""
+st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
+
+PLOTLY_LAYOUT = dict(
+    template="plotly_white",
+    font=dict(family="Inter, sans-serif", size=12, color="#334155"),
+    margin=dict(l=16, r=16, t=42, b=16),
+    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    hovermode="x unified",
+)
+
+# =============================================================================
+# 2. NẠP DỮ LIỆU TRỰC TIẾP TỪ app_data/ (KHÔNG THAY ĐỔI DỮ LIỆU)
+# =============================================================================
+DATA_DIR = Path(__file__).parent / "app_data"
+RES_DIR = DATA_DIR / "results"
 
 
-# ============================================================
-# 3. SHARED UI COMPONENTS
-# ============================================================
+@st.cache_data(show_spinner="Đang tải dữ liệu từ app_data/...")
+def load_all_data():
+    meta = json.loads((DATA_DIR / "meta.json").read_text(encoding="utf-8"))
+    products = pd.read_csv(DATA_DIR / "products.csv")
+    weekly = pd.read_parquet(DATA_DIR / "weekly_demand.parquet")
+    nlp = pd.read_parquet(DATA_DIR / "weekly_nlp_features.parquet")
+    pred = pd.read_parquet(DATA_DIR / "predictions.parquet")
+    reviews = pd.read_parquet(DATA_DIR / "review_samples.parquet")
 
-def page_header(eyebrow, title, subtitle):
-    st.markdown(
-        f"""
-        <div class="page-eyebrow">
-            {html.escape(eyebrow)}
-        </div>
-        <div class="page-title">
-            {html.escape(title)}
-        </div>
-        <div class="page-subtitle">
-            {html.escape(subtitle)}
-        </div>
-        """,
-        unsafe_allow_html=True
+    weekly["week"] = pd.to_datetime(weekly["week"])
+    nlp["week"] = pd.to_datetime(nlp["week"])
+    pred["week"] = pd.to_datetime(pred["week"])
+    if "origin_week" in pred.columns:
+        pred["origin_week"] = pd.to_datetime(pred["origin_week"])
+
+    results = {}
+    if RES_DIR.exists():
+        for csv_path in sorted(RES_DIR.glob("*.csv")):
+            results[csv_path.stem] = pd.read_csv(csv_path)
+
+    # Phân nhóm lượng review dựa trên tập train giống Notebook 4
+    train_end = pd.Timestamp(meta.get("train_end", "2021-12-27"))
+    tr_mask = (weekly["week"] <= train_end) & (weekly["launched"] == True)
+    vol = weekly.loc[tr_mask].groupby("series_id")["n_verified"].mean()
+    median_vol = float(vol.median()) if len(vol) else 0.0
+
+    products["reviews_per_week"] = products["series_id"].map(vol).fillna(0.0)
+    products["volume_group"] = np.where(
+        products["reviews_per_week"] >= median_vol, "Nhiều review", "Ít review"
     )
+    return meta, products, weekly, nlp, pred, reviews, results, median_vol
 
 
-def section_title(title):
-    st.markdown(
-        f'<div class="section-heading">'
-        f'{html.escape(title)}</div>',
-        unsafe_allow_html=True
-    )
-
-
-def style_chart(fig, height=420):
-    fig.update_layout(
-        template="plotly_white",
-        height=height,
-        paper_bgcolor="#FFFFFF",
-        plot_bgcolor="#FFFFFF",
-        font=dict(
-            family="DM Sans",
-            size=12,
-            color="#64748B"
-        ),
-        margin=dict(
-            l=30,
-            r=25,
-            t=35,
-            b=45
-        ),
-        hovermode="x unified",
-        hoverlabel=dict(
-            bgcolor="#FFFFFF",
-            font=dict(color="#19233B")
-        ),
-        legend=dict(
-            orientation="h",
-            y=-0.22,
-            x=0
-        ),
-        xaxis=dict(
-            showgrid=False,
-            linecolor="#E6EAF2"
-        ),
-        yaxis=dict(
-            gridcolor="#F0F2F7",
-            zeroline=False
-        )
-    )
-
-    return fig
-
-
-def pipeline_card(icon, title, description):
-    st.markdown(
-        f"""
-        <div class="pipeline-card">
-            <div class="pipeline-icon">{icon}</div>
-            <div class="pipeline-title">
-                {html.escape(title)}
-            </div>
-            <div class="pipeline-description">
-                {html.escape(description)}
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-
-# ============================================================
-# 4. DATA LOADING
-# ============================================================
-
-@st.cache_data
-def load(data_dir: str):
-    data_path = Path(data_dir)
-
-    required = [
-        "predictions.parquet",
-        "weekly_demand.parquet",
-        "weekly_nlp_features.parquet",
-        "products.csv"
-    ]
-
-    missing = [
-        name
-        for name in required
-        if not (data_path / name).exists()
-    ]
-
-    if missing:
-        return None, missing
-
-    d = {
-        "pred": pd.read_parquet(
-            data_path / "predictions.parquet"
-        ),
-        "weekly": pd.read_parquet(
-            data_path / "weekly_demand.parquet"
-        ),
-        "nlp": pd.read_parquet(
-            data_path / "weekly_nlp_features.parquet"
-        ),
-        "products": pd.read_csv(
-            data_path / "products.csv"
-        ),
-        "reviews": (
-            pd.read_parquet(
-                data_path / "review_samples.parquet"
-            )
-            if (data_path / "review_samples.parquet").exists()
-            else pd.DataFrame()
-        ),
-        "meta": (
-            json.loads(
-                (data_path / "meta.json").read_text(
-                    encoding="utf-8"
-                )
-            )
-            if (data_path / "meta.json").exists()
-            else {}
-        )
-    }
-
-    for key in ("pred", "weekly", "nlp"):
-        for column in ("week", "origin_week"):
-            if column in d[key].columns:
-                d[key][column] = pd.to_datetime(
-                    d[key][column]
-                )
-
-    d["pred"]["label"] = np.where(
-        d["pred"]["feature_set"] == "-",
-        d["pred"]["model"],
-        d["pred"]["model"]
-        + " · "
-        + d["pred"]["feature_set"]
-    )
-
-    d["products"]["title"] = (
-        d["products"]["title"].fillna(
-            d["products"]["series_id"]
-        )
-    )
-
-    return d, []
-
-
-@st.cache_data
-def result_table(name, data_dir=str(DATA), **kwargs):
-    path = Path(data_dir) / "results" / name
-
-    if path.exists():
-        return pd.read_csv(path, **kwargs)
-
-    return None
-
-
-D, missing = load(str(DATA))
-
-if D is None:
-    page_header(
-        "Setup required",
-        "Dataset not found",
-        "The dashboard needs the exported application data."
-    )
-
-    st.error(
-        f"Missing files in `{DATA}`: "
-        + ", ".join(missing)
-    )
-
-    st.info(
-        "Run notebook 4 and extract app_data.zip "
-        "into the app_data/ folder beside app.py."
-    )
-
+if not DATA_DIR.exists():
+    st.error("Không tìm thấy thư mục `app_data/`. Vui lòng đảm bảo thư mục dữ liệu nằm cạnh `app.py`.")
     st.stop()
 
-
-pred = D["pred"]
-weekly = D["weekly"]
-nlp = D["nlp"]
-products = D["products"]
-reviews = D["reviews"]
-meta = D["meta"]
-
-test_start = pred["week"].min()
-
-best = meta.get("best_model", {})
-
-default_main = (
-    f"{best.get('model', 'GRU')} · "
-    f"{best.get('feature_set', 'F0')}"
-)
-
-labels = sorted(
-    pred["label"].unique(),
-    key=lambda value: (
-        value.count("·") == 0,
-        value
-    )
-)
+meta, products, weekly, nlp, pred, reviews, results, median_vol = load_all_data()
 
 
-# ============================================================
-# 5. SIDEBAR NAVIGATION
-# ============================================================
-
-st.sidebar.markdown(
-    """
-    <div class="brand-box">
-        <div class="brand-icon">◈</div>
-        <div>
-            <div class="brand-name">DemandLens</div>
-            <div class="brand-caption">
-                AI DEMAND INTELLIGENCE
-            </div>
-        </div>
-    </div>
-    """,
-    unsafe_allow_html=True
-)
-
-st.sidebar.caption("WORKSPACE")
-
-page = st.sidebar.radio(
-    "Navigation",
-    [
-        "Forecast",
-        "Reviews & sentiment",
-        "Model results",
-        "About"
-    ],
-    label_visibility="collapsed"
-)
-
-st.sidebar.divider()
-
-st.sidebar.caption("PRODUCT FILTERS")
-
-cats = sorted(
-    products["category"].dropna().unique()
-)
-
-cat = st.sidebar.selectbox(
-    "Category",
-    cats
-)
-
-prods = (
-    products[products["category"] == cat]
-    .sort_values("title")
-)
-
-product_lookup = prods.set_index("series_id")[
-    "title"
-].to_dict()
-
-pick = st.sidebar.selectbox(
-    "Product",
-    prods["series_id"],
-    format_func=lambda sid: (
-        str(product_lookup.get(sid, sid))[:75]
-    )
-)
-
-prod = products.set_index("series_id").loc[pick]
-
-st.sidebar.divider()
-
-st.sidebar.caption(
-    "Amazon Reviews 2023 · NLP-powered demand analytics"
-)
-
-
-# ============================================================
-# 6. PRODUCT HELPERS
-# ============================================================
-
-def product_header():
-    details = [
-        f"Category: {cat.replace('_', ' ')}"
-    ]
-
-    if pd.notna(prod.get("price")):
-        details.append(
-            f"Price: \${prod['price']}"
-        )
-
-    if pd.notna(prod.get("average_rating")):
-        rating_count = prod.get("rating_number", 0)
-
-        if pd.isna(rating_count):
-            rating_count = 0
-
-        details.append(
-            f"Rating: {prod['average_rating']} ★ "
-            f"({int(rating_count):,} ratings)"
-        )
-
-    safe_title = html.escape(str(prod["title"]))
-    safe_details = html.escape("  •  ".join(details))
-
+def kpi_card(label: str, value: str, sub: str, variant: str = ""):
     st.markdown(
         f"""
-        <div class="product-panel">
-            <div class="product-title">
-                {safe_title}
-            </div>
-            <div class="product-details">
-                {safe_details}
-            </div>
+        <div class="kpi-card {variant}">
+            <div class="kpi-label">{label}</div>
+            <div class="kpi-value">{value}</div>
+            <div class="kpi-sub">{sub}</div>
         </div>
         """,
-        unsafe_allow_html=True
+        unsafe_allow_html=True,
     )
 
 
-def series(sid):
-    w = weekly[
-        weekly["series_id"] == sid
-    ].sort_values("week")
-
-    if "launched" in w.columns:
-        return w[w["launched"]]
-
-    return w
-
-
-# ============================================================
-# 7. PAGE: DEMAND FORECASTING
-# ============================================================
-
-if page == "Forecast":
-
-    page_header(
-        "Forecasting workspace",
-        "Demand Forecasting",
-        "Explore historical demand, compare AI models, "
-        "and evaluate prediction accuracy."
-    )
-
-    product_header()
-
-    w = series(pick)
-
-    pp = pred[
-        pred["series_id"] == pick
-    ].copy()
-
-    pp["abs_err"] = (
-        pp["y_pred"] - pp["y_true"]
-    ).abs()
-
-    tbl = (
-        pp.groupby("label")
-        .agg(
-            MAE=("abs_err", "mean"),
-            actual=("y_true", "sum"),
-            err=("abs_err", "sum")
-        )
-        .assign(
-            WAPE=lambda t: (
-                t["err"]
-                / t["actual"].clip(lower=1e-9)
-            )
-        )[["MAE", "WAPE"]]
-        .sort_values("MAE")
-    )
-
-    recent = (
-        w[w["week"] < test_start]
-        .tail(8)["n_verified"]
-        .mean()
-    )
-
-    if tbl.empty:
-        st.warning(
-            "No forecast results are available "
-            "for this product."
-        )
-        st.stop()
-
-    best_model = tbl.index[0]
-
-    best_mae = tbl.iloc[0]["MAE"]
-
-    test_weeks = pp["week"].nunique()
-
-    # KPI section
-    section_title("Performance Overview")
-
-    k1, k2, k3, k4 = st.columns(4)
-
-    with k1:
-        st.metric(
-            "Average Weekly Demand",
-            (
-                f"{recent:.1f}"
-                if pd.notna(recent)
-                else "N/A"
-            ),
-            help="Average of the last 8 weeks before test"
-        )
-
-    with k2:
-        st.metric(
-            "Best Model MAE",
-            f"{best_mae:.2f}"
-        )
-
-    with k3:
-        st.metric(
-            "Best Performing Model",
-            best_model
-        )
-
-    with k4:
-        st.metric(
-            "Test Weeks",
-            f"{test_weeks}"
-        )
-
-    st.write("")
-
-    # Forecast visualization
-    section_title("Demand Prediction Analysis")
-
-    chart_col, filter_col = st.columns(
-        [3, 1],
-        gap="large"
-    )
-
-    with filter_col:
-        st.markdown("##### Forecast Settings")
-
-        defaults = [
-            model
-            for model in [
-                default_main,
-                "GRU · F4",
-                "MA4"
-            ]
-            if model in labels
-        ]
-
-        if not defaults and labels:
-            defaults = [labels[0]]
-
-        choose = st.multiselect(
-            "Forecast Models",
-            labels,
-            default=list(dict.fromkeys(defaults))
-        )
-
-        h = st.radio(
-            "Forecast Horizon",
-            [1, 2, 3, 4],
-            horizontal=True,
-            format_func=lambda x: f"{x}W"
-        )
-
-        hist_weeks = st.slider(
-            "History Shown (Weeks)",
-            min_value=26,
-            max_value=208,
-            value=78,
-            step=13
-        )
-
-        st.caption(
-            "Select models and forecast horizon "
-            "to update the visualization."
-        )
-
-    with chart_col:
-
-        p = pred[
-            (pred["series_id"] == pick)
-            & (pred["horizon"] == h)
-        ]
-
-        start = (
-            test_start
-            - pd.Timedelta(weeks=hist_weeks)
-        )
-
-        fig = go.Figure()
-
-        if not w.empty:
-            fig.add_vrect(
-                x0=test_start,
-                x1=w["week"].max(),
-                fillcolor="#F0EFFF",
-                opacity=0.7,
-                line_width=0,
-                layer="below",
-                annotation_text="Test period",
-                annotation_position="top left"
-            )
-
-        visible_history = w[
-            w["week"] >= start
-        ]
-
-        fig.add_trace(
-            go.Scatter(
-                x=visible_history["week"],
-                y=visible_history["n_verified"],
-                mode="lines",
-                name="Actual Demand",
-                line=dict(
-                    color=DARK,
-                    width=3
-                ),
-                hovertemplate=(
-                    "%{x|%d %b %Y}"
-                    "<br>Actual: %{y:.2f}"
-                    "<extra></extra>"
-                )
-            )
-        )
-
-        palette = [
-            PRIMARY,
-            GREEN,
-            RED,
-            ORANGE,
-            "#9B72E8",
-            "#16A3CE",
-            GREY,
-            "#CC7894"
-        ]
-
-        for i, lab in enumerate(choose):
-
-            q = p[
-                p["label"] == lab
-            ].sort_values("week")
-
-            fig.add_trace(
-                go.Scatter(
-                    x=q["week"],
-                    y=q["y_pred"],
-                    mode="lines",
-                    name=lab,
-                    line=dict(
-                        color=palette[i % len(palette)],
-                        width=2.4,
-                        dash=(
-                            "dot"
-                            if "·" not in lab
-                            else "solid"
-                        )
-                    )
-                )
-            )
-
-        fig = style_chart(fig, height=450)
-
-        fig.update_layout(
-            yaxis_title="Verified Reviews / Week"
-        )
-
-        st.plotly_chart(
-            fig,
-            use_container_width=True
-        )
-
-    section_title("Model Error Comparison")
-
-    with st.expander(
-        "View detailed model performance",
-        expanded=True
-    ):
-        st.dataframe(
-            tbl.style.format({
-                "MAE": "{:.2f}",
-                "WAPE": "{:.1%}"
-            }),
-            use_container_width=True
-        )
-
-        st.download_button(
-            "Download Metrics CSV",
-            data=tbl.to_csv().encode("utf-8"),
-            file_name="forecast_metrics.csv",
-            mime="text/csv"
-        )
-
-    st.caption(
-        "Demand proxy = verified-purchase reviews per week. "
-        "Models forecast the next 4 weeks using the previous "
-        "26 weeks. MA4 represents the 4-week moving average."
-    )
-
-
-# ============================================================
-# 8. PAGE: REVIEWS & SENTIMENT
-# ============================================================
-
-elif page == "Reviews & sentiment":
-
-    page_header(
-        "Customer intelligence",
-        "Reviews & Sentiment",
-        "Discover customer opinions, sentiment trends, "
-        "and key product attributes."
-    )
-
-    product_header()
-
-    w = series(pick)
-
-    f = (
-        nlp[nlp["series_id"] == pick]
-        .merge(
-            w[["week", "n_verified"]],
-            on="week"
-        )
-        .sort_values("week")
-    )
-
-    if f.empty:
-        st.warning(
-            "No NLP data is available for this product."
-        )
-        st.stop()
-
-    # Sentiment summary
-    section_title("Sentiment Overview")
-
-    sentiment = f["sent_mean"].mean()
-    negative = f["neg_ratio"].mean()
-    avg_demand = f["n_verified"].mean()
-
-    k1, k2, k3 = st.columns(3)
-
-    with k1:
-        st.metric(
-            "Average Sentiment",
-            f"{sentiment:+.3f}"
-        )
-
-    with k2:
-        st.metric(
-            "Negative Review Ratio",
-            f"{negative:.1%}"
-        )
-
-    with k3:
-        st.metric(
-            "Average Weekly Demand",
-            f"{avg_demand:.1f}"
-        )
-
-    st.write("")
-
-    section_title("Sentiment & Demand Trends")
-
-    smooth = st.slider(
-        "Rolling Average (Weeks)",
-        min_value=1,
-        max_value=13,
-        value=4
-    )
-
-    r = (
-        f.set_index("week")
-        .rolling(
-            smooth,
-            min_periods=1
-        )
-        .mean(numeric_only=True)
-        .reset_index()
-    )
-
-    fig = make_subplots(
-        specs=[[{"secondary_y": True}]]
-    )
-
-    fig.add_trace(
-        go.Scatter(
-            x=r["week"],
-            y=r["n_verified"],
-            name="Verified Demand",
-            line=dict(
-                color=DARK,
-                width=3
-            )
-        ),
-        secondary_y=False
-    )
-
-    fig.add_trace(
-        go.Scatter(
-            x=r["week"],
-            y=r["sent_mean"],
-            name="Mean Sentiment",
-            line=dict(
-                color=PRIMARY,
-                width=2.5
-            )
-        ),
-        secondary_y=True
-    )
-
-    fig.add_trace(
-        go.Scatter(
-            x=r["week"],
-            y=r["neg_ratio"],
-            name="Negative Review Share",
-            line=dict(
-                color=RED,
-                width=2.5
-            )
-        ),
-        secondary_y=True
-    )
-
-    fig.add_vline(
-        x=test_start,
-        line_dash="dot",
-        line_color=GREY
-    )
-
-    fig = style_chart(fig, height=440)
-
-    fig.update_yaxes(
-        title_text="Demand",
-        secondary_y=False
-    )
-
-    fig.update_yaxes(
-        title_text="Sentiment / Share",
-        secondary_y=True
-    )
-
-    st.plotly_chart(
-        fig,
-        use_container_width=True
-    )
-
-    # Aspect analysis
-    asp_cols = [
-        c
-        for c in f.columns
-        if c.startswith("asp_")
-    ]
-
-    if asp_cols:
-
-        section_title("What Customers Talk About")
-
-        chosen = st.multiselect(
-            "Review Aspects",
-            asp_cols,
-            default=[
-                c
-                for c in [
-                    "asp_quality",
-                    "asp_durability",
-                    "asp_gift"
-                ]
-                if c in asp_cols
-            ],
-            format_func=lambda c: ASPECT_NAMES.get(c, c)
-        )
-
-        fig2 = go.Figure()
-
-        aspect_palette = [
-            PRIMARY,
-            GREEN,
-            ORANGE,
-            RED,
-            "#9B72E8",
-            "#16A3CE",
-            GREY
-        ]
-
-        for i, aspect in enumerate(chosen):
-
-            fig2.add_trace(
-                go.Scatter(
-                    x=r["week"],
-                    y=r[aspect],
-                    name=ASPECT_NAMES.get(
-                        aspect,
-                        aspect
-                    ),
-                    mode="lines",
-                    line=dict(
-                        color=aspect_palette[
-                            i % len(aspect_palette)
-                        ],
-                        width=2.5
-                    )
-                )
-            )
-
-        fig2 = style_chart(fig2, height=350)
-
-        fig2.update_layout(
-            yaxis_title="Share of Reviews",
-            yaxis_tickformat=".0%"
-        )
-
-        st.plotly_chart(
-            fig2,
-            use_container_width=True
-        )
-
-        overall = (
-            f[asp_cols]
-            .mean()
-            .rename(index=ASPECT_NAMES)
-            .sort_values(ascending=False)
-        )
-
-        with st.expander(
-            "Overall Review Aspect Distribution"
-        ):
-            st.dataframe(
-                overall.to_frame(
-                    "Share of Reviews"
-                ).style.format({
-                    "Share of Reviews": "{:.1%}"
-                }),
-                use_container_width=True
-            )
-
-    # Review samples
-    if not reviews.empty:
-
-        section_title("Most Helpful Customer Reviews")
-
-        rv = reviews[
-            reviews["series_id"] == pick
-        ]
-
-        col_pos, col_neg = st.columns(
-            2,
-            gap="large"
-        )
-
-        review_groups = [
-            (col_pos, "pos", "Positive Reviews"),
-            (col_neg, "neg", "Negative Reviews")
-        ]
-
-        for col, lab, heading in review_groups:
-
-            with col:
-
-                st.markdown(f"##### {heading}")
-
-                sub = rv[
-                    rv["label"] == lab
-                ]
-
-                if sub.empty:
-                    st.info(
-                        "No reviews in this category."
-                    )
-
-                for _, x in sub.iterrows():
-
-                    date = pd.to_datetime(
-                        x["date"]
-                    ).date()
-
-                    stars = "★" * int(x["rating"])
-
-                    review_title = str(
-                        x["title"]
-                    )[:60]
-
-                    with st.expander(
-                        f"{stars} {review_title} — {date}"
-                    ):
-
-                        st.write(x["text"])
-
-                        st.caption(
-                            f"Sentiment: {x['sent']:+.2f}"
-                            f"  •  "
-                            f"{int(x['helpful_vote'])} "
-                            "helpful votes"
-                        )
-
-
-# ============================================================
-# 9. PAGE: MODEL RESULTS
-# ============================================================
-
-elif page == "Model results":
-
-    page_header(
-        "Machine learning evaluation",
-        "Model Performance",
-        "Compare models, evaluate feature contributions, "
-        "and analyze prediction errors."
-    )
-
-    section_title("Experiment Overview")
-
-    k1, k2, k3 = st.columns(3)
-
-    with k1:
-        st.metric(
-            "Test Period",
-            "Jul–Dec 2022"
-        )
-
-    with k2:
-        st.metric(
-            "Feature Sets",
-            "F0 – F4"
-        )
-
-    with k3:
-        st.metric(
-            "Evaluation Metric",
-            "MASE"
-        )
-
-    st.caption(
-        "MASE measures prediction error relative to "
-        "a naive forecast. Lower values are better. "
-        "Deep learning results average three seeds."
-    )
-
-    ens = result_table(
-        "metrics_ensemble.csv"
-    )
-
-    abl = result_table(
-        "ablation_mase.csv",
-        index_col=0
-    )
-
-    # Ablation chart
-    if abl is not None:
-
-        section_title("Feature Ablation Analysis")
-
-        sets = [
-            c
-            for c in ["F0", "F1", "F2", "F3", "F4"]
-            if c in abl.columns
-        ]
-
-        if sets:
-
-            fig = go.Figure()
-
-            shades = [
-                PRIMARY,
-                "#938AFF",
-                GREEN,
-                ORANGE,
-                RED
-            ]
-
-            for i, feature in enumerate(sets):
-
-                fig.add_trace(
-                    go.Bar(
-                        x=abl.index,
-                        y=abl[feature],
-                        name=feature,
-                        marker_color=shades[i]
-                    )
-                )
-
-            if (
-                ens is not None
-                and "model" in ens.columns
-                and "MASE" in ens.columns
-                and (ens["model"] == "MA4").any()
-            ):
-
-                ma4 = ens.loc[
-                    ens["model"] == "MA4",
-                    "MASE"
-                ].iloc[0]
-
-                fig.add_hline(
-                    y=ma4,
-                    line_dash="dash",
-                    line_color=GREY,
-                    annotation_text=f"MA4 {ma4:.3f}"
-                )
-
-            fig = style_chart(
-                fig,
-                height=430
-            )
-
-            fig.update_layout(
-                barmode="group",
-                yaxis_title="MASE (Test)"
-            )
-
-            st.plotly_chart(
-                fig,
-                use_container_width=True
-            )
-
-            st.caption(
-                "F0: Demand only  •  "
-                "F1: Calendar  •  "
-                "F2: Review statistics  •  "
-                "F3: Sentiment  •  "
-                "F4: Review aspects"
-            )
-
-    # Result tables
-    section_title("Detailed Experiment Results")
-
-    tabs = st.tabs([
-        "Model Comparison",
-        "Significance",
-        "By Category",
-        "Review Volume",
-        "v1 → v2"
-    ])
-
-    with tabs[0]:
-
-        t = result_table(
-            "model_comparison.csv"
-        )
-
-        if t is not None:
-            st.dataframe(
-                t,
-                use_container_width=True,
-                hide_index=True
-            )
-        else:
-            st.info("No comparison file available.")
-
-    with tabs[1]:
-
-        t = result_table(
-            "significance.csv"
-        )
-
-        if t is not None:
-
-            float_columns = {
-                c: "{:.4f}"
-                for c in t.columns
-                if t[c].dtype.kind == "f"
-            }
-
-            st.dataframe(
-                t.style.format(float_columns),
-                use_container_width=True,
-                hide_index=True
-            )
-
-            st.caption(
-                "Paired Wilcoxon test on per-product MAE. "
-                "p < 0.05 indicates statistical significance."
-            )
-
-        else:
-            st.info("No significance file available.")
-
-    with tabs[2]:
-
-        t = result_table(
-            "mase_by_category.csv",
-            index_col=0
-        )
-
-        if t is not None:
-
-            st.dataframe(
-                t.round(3),
-                use_container_width=True
-            )
-
-        else:
-            st.info("No category results available.")
-
-    with tabs[3]:
-
-        t = result_table(
-            "volume_split.csv"
-        )
-
-        if t is not None:
-
-            st.dataframe(
-                t.round(4),
-                use_container_width=True,
-                hide_index=True
-            )
-
-            st.caption(
-                "Products are split by median verified "
-                "review volume during the training period."
-            )
-
-        else:
-            st.info(
-                "Run notebook 4 to generate these results."
-            )
-
-    with tabs[4]:
-
-        t = result_table(
-            "v1_vs_v2.csv",
-            header=[0, 1]
-        )
-
-        if t is not None:
-
-            t.columns = [
-                " ".join(
-                    str(c)
-                    for c in col
-                    if not str(c).startswith("Unnamed")
-                ).strip()
-                for col in t.columns
-            ]
-
-            st.dataframe(
-                t.round(3),
-                use_container_width=True,
-                hide_index=True
-            )
-
-            st.caption(
-                "v1 uses training-mean scaling. "
-                "v2 normalizes each input window "
-                "by its recent demand level. "
-                "Negative Δ indicates v2 is better."
-            )
-
-        else:
-            st.info("No v1 comparison results found.")
-
-
-# ============================================================
-# 10. PAGE: ABOUT
-# ============================================================
-
-else:
-
-    page_header(
-        "Project overview",
-        "About DemandLens",
-        "AI-powered customer demand forecasting "
-        "from online product reviews."
-    )
-
-    section_title("Research Question")
-
-    st.markdown(
-        """
-        Can customer reviews and NLP-derived signals
-        improve the accuracy of weekly product
-        demand forecasting?
-        """
-    )
-
-    section_title("Data Overview")
-
-    first_week = weekly["week"].min().date()
-    last_week = weekly["week"].max().date()
-
-    total_products = products[
-        "series_id"
-    ].nunique()
-
-    total_categories = products[
-        "category"
-    ].nunique()
-
-    c1, c2, c3 = st.columns(3)
-
-    with c1:
-        st.metric(
-            "Products",
-            f"{total_products:,}"
-        )
-
-    with c2:
-        st.metric(
-            "Categories",
-            str(total_categories)
-        )
-
-    with c3:
-        st.metric(
-            "Data Source",
-            "Amazon 2023"
-        )
-
-    st.caption(
-        f"Weekly demand series: {first_week} → "
-        f"{last_week}. Demand is approximated by "
-        "the number of verified-purchase reviews."
-    )
-
-    section_title("AI Research Pipeline")
-
-    p1, p2 = st.columns(2, gap="large")
-
-    with p1:
-
-        pipeline_card(
-            "📦",
-            "01. Data Preparation",
-            "Select products with dense review histories "
-            "and construct weekly demand time series."
-        )
-
-    with p2:
-
-        pipeline_card(
-            "🧠",
-            "02. NLP Feature Extraction",
-            "Extract RoBERTa sentiment and seven "
-            "product aspects using sentence embeddings."
-        )
-
-    p3, p4 = st.columns(2, gap="large")
-
-    with p3:
-
-        pipeline_card(
-            "📈",
-            "03. Demand Forecasting",
-            "Forecast four weeks ahead using 26 weeks "
-            "of history with Ridge, LightGBM, "
-            "LSTM, GRU and Transformer models."
-        )
-
-    with p4:
-
-        pipeline_card(
-            "📊",
-            "04. Model Evaluation",
-            "Use time-based train, validation and "
-            "test splits with MASE, WAPE, "
-            "ablation studies and Wilcoxon tests."
-        )
-
-    section_title("Model Architecture")
-
-    st.markdown(
-        """
-        The forecasting pipeline includes:
-
-        - **Baselines:** Naive, Seasonal Naive, MA4
-        - **Machine Learning:** Ridge, LightGBM
-        - **Deep Learning:** LSTM, GRU, Transformer
-        - **NLP:** RoBERTa sentiment and seven aspects
-        - **Feature Groups:** F0, F1, F2, F3, F4
-        - **Normalization:** Per-window normalization (v2)
-        """
-    )
-
-    section_title("Evaluation Strategy")
-
-    train_end = meta.get(
-        "train_end",
-        "2021-12"
-    )
-
-    val_end = meta.get(
-        "val_end",
-        "2022-06"
-    )
-
-    st.markdown(
-        f"""
-        **Training:** through {train_end}
-
-        **Validation:** through {val_end}
-
-        **Testing:** Jul–Dec 2022
-
-        **Evaluation:** MASE, WAPE,
-        MAE and paired Wilcoxon testing.
-        """
-    )
-
-    section_title("Research Findings")
-
-    st.markdown(
-        """
-        **Key findings from the project:**
-
-        - All evaluated models outperform MA4
-          after per-window normalization.
-        - Historical demand alone provides
-          the best average forecasting accuracy.
-        - NLP features can reduce large errors.
-        - Review-rich product categories benefit
-          more from sentiment and aspect signals.
-        - NLP does not improve average scaled
-          error across all products.
-        """
-    )
-
+# =============================================================================
+# 3. SIDEBAR THÔNG TIN DỰ ÁN
+# =============================================================================
+with st.sidebar:
+    st.markdown("### 📈 DemandPulse AI")
+    st.caption("Dự báo nhu cầu tiêu dùng bằng NLP theo thời gian & Học sâu")
     st.divider()
 
-    st.caption(
-        "DemandLens · Customer Demand Forecasting "
-        "from Online Product Reviews · "
-        "Powered by Python, Streamlit, "
-        "Plotly and NLP"
+    st.markdown("**Cấu hình mô hình (`meta.json`)**")
+    best_m = meta.get("best_model", {})
+    st.markdown(
+        f"""
+        - **Phiên bản:** `{meta.get("version", "v2")}` (`{meta.get("norm", "window")}`)
+        - **Cửa sổ trượt:** `L = {meta.get("L", 26)}` tuần → `H = {meta.get("H", 4)}` tuần
+        - **Train đến:** `{meta.get("train_end", "-")}`
+        - **Val đến:** `{meta.get("val_end", "-")}`
+        - **Best (Val):** `{best_m.get("model", "-")} {best_m.get("feature_set", "-")}`
+        - **Trung vị review:** `{median_vol:.1f}` / tuần
+        """
     )
+    st.divider()
+    st.markdown("**Bộ đặc trưng (Ablation)**")
+    st.caption(
+        "- **F0**: Lịch sử nhu cầu\n"
+        "- **F1**: F0 + Lịch & mùa lễ\n"
+        "- **F2**: F1 + Rating & Helpful\n"
+        "- **F3**: F2 + Sentiment (RoBERTa)\n"
+        "- **F4**: F3 + 7 khía cạnh (Aspects)"
+    )
+
+# =============================================================================
+# 4. HERO HEADER
+# =============================================================================
+n_series = int(weekly["series_id"].nunique())
+n_cats = int(weekly["category"].nunique())
+n_weeks = int(weekly["week"].nunique())
+tot_reviews = int(weekly["n_reviews"].sum())
+tot_verified = int(weekly["n_verified"].sum())
+
+st.markdown(
+    f"""
+    <div class="hero-box">
+        <div class="hero-badge">Capstone Project • Amazon Reviews 2023 • Model {meta.get("version", "v2").upper()}</div>
+        <div class="hero-title">Dự báo nhu cầu tiêu dùng dựa trên dữ liệu mạng xã hội bằng NLP & Học sâu</div>
+        <p class="hero-sub">
+            Hệ thống đánh giá trực quan trên <b>{n_series}</b> chuỗi sản phẩm thuộc <b>{n_cats}</b> ngành hàng
+            ({n_weeks} tuần, {tot_reviews:,} reviews) — đối chiếu các mô hình học sâu (GRU, LSTM, Transformer),
+            ML (LightGBM, Ridge) và kiểm chứng tác động của đặc trưng NLP theo mật độ review.
+        </p>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+# =============================================================================
+# 5. ĐIỀU HƯỚNG 4 TAB CHÍNH
+# =============================================================================
+tab_overview, tab_explorer, tab_ablation, tab_nlp = st.tabs(
+    [
+        "📊 Tổng quan kết quả",
+        "🔎 Dự báo theo sản phẩm",
+        "🧪 Ablation & v1 → v2",
+        "✨ NLP & Mật độ review",
+    ]
+)
+
+# -----------------------------------------------------------------------------
+# TAB 1: TỔNG QUAN KẾT QUẢ
+# -----------------------------------------------------------------------------
+with tab_overview:
+    ens_df = results.get("metrics_ensemble", pd.DataFrame())
+    vol_df = results.get("volume_split", pd.DataFrame())
+
+    best_mase_str, best_sub = "-", "Chưa có metrics_ensemble.csv"
+    if not ens_df.empty and best_m:
+        row_best = ens_df[
+            (ens_df["model"] == best_m.get("model"))
+            & (ens_df["feature_set"] == best_m.get("feature_set"))
+        ]
+        row_ma4 = ens_df[ens_df["model"] == "MA4"]
+        if not row_best.empty:
+            b_mase = float(row_best["MASE"].iloc[0])
+            b_wape = float(row_best["WAPE"].iloc[0])
+            best_mase_str = f"{b_mase:.3f}"
+            if not row_ma4.empty:
+                m4 = float(row_ma4["MASE"].iloc[0])
+                diff_pct = (b_mase / m4 - 1) * 100
+                best_sub = f"{best_m.get('model')} {best_m.get('feature_set')} • WAPE {b_wape:.3f} ({diff_pct:+.1f}% vs MA4)"
+            else:
+                best_sub = f"{best_m.get('model')} {best_m.get('feature_set')} • WAPE {b_wape:.3f}"
+
+    nlp_val_str, nlp_sub = "-", "Xem tab NLP & Mật độ review"
+    if not vol_df.empty:
+        hv_gru = vol_df[
+            vol_df["group"].astype(str).str.contains("nhiều", case=False, na=False)
+            & (vol_df["model"] == "GRU")
+        ]
+        if not hv_gru.empty:
+            r = hv_gru.iloc[0]
+            nlp_val_str = f"{float(r['MASE F4']):.4f}"
+            delta_col = [c for c in vol_df.columns if "MASE %" in c]
+            p_col = [c for c in vol_df.columns if "Wilcoxon" in c]
+            d_txt = f"Δ {float(r[delta_col[0]]):+.2f}%" if delta_col else ""
+            p_txt = f"p = {float(r[p_col[0]]):.4f}" if p_col else ""
+            nlp_sub = f"GRU F4 nhóm nhiều review • {d_txt} ({p_txt})"
+
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        kpi_card("Chuỗi thời gian", f"{n_series}", f"{n_cats} ngành hàng × {n_weeks} tuần")
+    with c2:
+        kpi_card("Dữ liệu đánh giá", f"{tot_reviews:,}", f"{tot_verified:,} review verified")
+    with c3:
+        kpi_card("Best Model (Test MASE)", best_mase_str, best_sub, variant="accent")
+    with c4:
+        kpi_card("Hiệu ứng NLP (Nhiều review)", nlp_val_str, nlp_sub, variant="success")
+
+    st.markdown("<div style='height: 14px;'></div>", unsafe_allow_html=True)
+
+    col_left, col_right = st.columns(2)
+    with col_left:
+        st.markdown('<div class="section-card">', unsafe_allow_html=True)
+        st.subheader("MASE theo ngành hàng (Test)")
+        by_cat = results.get("mase_by_category", pd.DataFrame())
+        if not by_cat.empty:
+            cat_col = by_cat.columns[0]
+            plot_cols = [c for c in ["MA4", "GRU F2", "GRU F4", "LightGBM F4"] if c in by_cat.columns]
+            if plot_cols:
+                m_cat = by_cat.melt(id_vars=cat_col, value_vars=plot_cols, var_name="Mô hình", value_name="MASE")
+                fig_cat = px.bar(
+                    m_cat,
+                    x=cat_col,
+                    y="MASE",
+                    color="Mô hình",
+                    barmode="group",
+                    color_discrete_sequence=["#94A3B8", "#6366F1", "#059669", "#0891B2"],
+                )
+                fig_cat.update_layout(**PLOTLY_LAYOUT, xaxis_title="", yaxis_title="MASE (thấp hơn tốt hơn)", height=360)
+                st.plotly_chart(fig_cat, use_container_width=True)
+        else:
+            st.info("Chưa có file `mase_by_category.csv`.")
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    with col_right:
+        st.markdown('<div class="section-card">', unsafe_allow_html=True)
+        st.subheader("Top mô hình tốt nhất (Ensemble Test MASE)")
+        if not ens_df.empty:
+            top_ens = ens_df.sort_values("MASE").head(10).copy()
+            top_ens["label"] = top_ens["model"] + " " + top_ens["feature_set"].replace("-", "(Baseline)")
+            top_ens["Nhóm"] = np.where(
+                top_ens["feature_set"] == "-",
+                "Baseline",
+                np.where(top_ens["feature_set"].isin(["F3", "F4"]), "Có NLP", "Không NLP"),
+            )
+            fig_rank = px.bar(
+                top_ens.iloc[::-1],
+                x="MASE",
+                y="label",
+                orientation="h",
+                color="Nhóm",
+                text=top_ens.iloc[::-1]["MASE"].map(lambda x: f"{x:.3f}"),
+                color_discrete_map={"Không NLP": "#4F46E5", "Có NLP": "#059669", "Baseline": "#D97706"},
+            )
+            fig_rank.update_traces(textposition="outside")
+            fig_rank.update_layout(**PLOTLY_LAYOUT, xaxis_title="Test MASE", yaxis_title="", height=360)
+            st.plotly_chart(fig_rank, use_container_width=True)
+        else:
+            st.info("Chưa có file `metrics_ensemble.csv`.")
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    st.markdown('<div class="section-card">', unsafe_allow_html=True)
+    st.subheader("Thống kê dữ liệu theo từng ngành (từ `weekly_demand.parquet`)")
+    eda_tbl = (
+        weekly[weekly["launched"] == True]
+        .groupby("category")
+        .agg(
+            so_chuoi=("series_id", "nunique"),
+            tong_review=("n_reviews", "sum"),
+            tong_verified=("n_verified", "sum"),
+            tb_verified_tuan=("n_verified", "mean"),
+            ti_le_tuan_0=("n_verified", lambda s: (s == 0).mean() * 100),
+        )
+        .reset_index()
+    )
+    eda_tbl.columns = ["Ngành hàng", "Số chuỗi", "Tổng review", "Tổng verified", "TB verified/tuần", "Tỉ lệ tuần = 0 (%)"]
+    st.dataframe(
+        eda_tbl.style.format(
+            {"Tổng review": "{:,.0f}", "Tổng verified": "{:,.0f}", "TB verified/tuần": "{:.2f}", "Tỉ lệ tuần = 0 (%)": "{:.1f}%"}
+        ),
+        use_container_width=True,
+        hide_index=True,
+    )
+    st.markdown("</div>", unsafe_allow_html=True)
+
+# -----------------------------------------------------------------------------
+# TAB 2: DỰ BÁO THEO SẢN PHẨM
+# -----------------------------------------------------------------------------
+with tab_explorer:
+    f1, f2, f3, f4 = st.columns([1.2, 1.0, 2.2, 0.8])
+    with f1:
+        cats = ["Tất cả"] + sorted(products["category"].dropna().unique().tolist())
+        sel_cat = st.selectbox("Ngành hàng", cats)
+    with f2:
+        sel_vol = st.selectbox("Nhóm lượng review", ["Tất cả", "Nhiều review", "Ít review"])
+
+    prod_filt = products.copy()
+    if sel_cat != "Tất cả":
+        prod_filt = prod_filt[prod_filt["category"] == sel_cat]
+    if sel_vol != "Tất cả":
+        prod_filt = prod_filt[prod_filt["volume_group"] == sel_vol]
+    prod_filt = prod_filt.sort_values("total", ascending=False)
+
+    if prod_filt.empty:
+        st.warning("Không có sản phẩm nào phù hợp bộ lọc hiện tại.")
+    else:
+        with f3:
+            prod_options = prod_filt["series_id"].tolist()
+            label_map = {
+                r["series_id"]: f"[{r['parent_asin']}] {str(r.get('title', r['series_id']))[:65]}"
+                for _, r in prod_filt.iterrows()
+            }
+            sel_sid = st.selectbox("Sản phẩm", prod_options, format_func=lambda x: label_map.get(x, x))
+        with f4:
+            horizons = sorted(pred["horizon"].unique().tolist())
+            sel_h = st.selectbox("Horizon (tuần)", horizons, index=0)
+
+        p_row = products[products["series_id"] == sel_sid].iloc[0]
+
+        # Chọn mô hình hiển thị
+        avail_models = sorted([m for m in pred["model"].unique() if m not in ("Naive", "SeasonalNaive", "MA4")])
+        default_idx = avail_models.index("GRU") if "GRU" in avail_models else 0
+        m_col1, m_col2 = st.columns([1, 2.5])
+        with m_col1:
+            sel_model = st.selectbox("Mô hình chính", avail_models, index=default_idx)
+        with m_col2:
+            show_lines = st.multiselect(
+                "Đường dự báo đối chiếu",
+                options=["F0", "F2", "F4", "MA4"],
+                default=["F0", "F4", "MA4"],
+            )
+
+        # Thẻ thông tin sản phẩm
+        pm1, pm2, pm3, pm4 = st.columns(4)
+        price_val = p_row.get("price")
+        price_str = f"${float(price_val):.2f}" if pd.notna(price_val) else "N/A"
+        with pm1:
+            kpi_card("ASIN / Ngành", str(p_row["parent_asin"]), str(p_row["category"]).replace("_", " "))
+        with pm2:
+            kpi_card("Giá bán & Rating", price_str, f"Rating TB: {p_row.get('average_rating', 'N/A')} ★")
+        with pm3:
+            kpi_card("Tổng review verified", f"{int(p_row.get('total', 0)):,}", f"TB tập train: {p_row['reviews_per_week']:.1f} / tuần")
+        with pm4:
+            v_variant = "success" if p_row["volume_group"] == "Nhiều review" else ""
+            kpi_card("Phân nhóm mật độ", p_row["volume_group"], f"Ngưỡng trung vị: {median_vol:.1f} rev/tuần", variant=v_variant)
+
+        st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
+
+        # Biểu đồ dự báo & Khía cạnh NLP
+        ch_left, ch_right = st.columns([2.1, 1.0])
+        with ch_left:
+            st.markdown('<div class="section-card">', unsafe_allow_html=True)
+            st.subheader(f"Chuỗi nhu cầu thực tế & Dự báo {sel_model} (h = {sel_h})")
+            w_s = weekly[weekly["series_id"] == sel_sid].sort_values("week")
+            p_s = pred[(pred["series_id"] == sel_sid) & (pred["horizon"] == sel_h)].sort_values("week")
+
+            # Chỉ hiển thị từ 1 năm trước val_end cho dễ quan sát
+            val_end = pd.Timestamp(meta.get("val_end", "2022-06-27"))
+            w_show = w_s[w_s["week"] >= val_end - pd.Timedelta(weeks=40)]
+
+            fig_ts = go.Figure()
+            fig_ts.add_trace(
+                go.Scatter(
+                    x=w_show["week"],
+                    y=w_show["n_verified"],
+                    mode="lines+markers",
+                    name="Thực tế (Verified)",
+                    line=dict(color="#0F172A", width=2.2),
+                    marker=dict(size=4),
+                )
+            )
+            color_map = {"F0": "#4F46E5", "F2": "#0891B2", "F4": "#059669", "MA4": "#D97706"}
+            for line_key in show_lines:
+                if line_key == "MA4":
+                    sub = p_s[p_s["model"] == "MA4"]
+                    name = "Baseline MA4"
+                    dash = "dot"
+                else:
+                    sub = p_s[(p_s["model"] == sel_model) & (p_s["feature_set"] == line_key)]
+                    name = f"{sel_model} {line_key}"
+                    dash = "solid"
+                if not sub.empty:
+                    fig_ts.add_trace(
+                        go.Scatter(
+                            x=sub["week"],
+                            y=sub["y_pred"],
+                            mode="lines",
+                            name=name,
+                            line=dict(color=color_map[line_key], width=2, dash=dash),
+                        )
+                    )
+            fig_ts.add_vline(x=val_end, line_dash="dash", line_color="#94A3B8")
+            fig_ts.update_layout(**PLOTLY_LAYOUT, xaxis_title="", yaxis_title="Review verified / tuần", height=390)
+            st.plotly_chart(fig_ts, use_container_width=True)
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        with ch_right:
+            st.markdown('<div class="section-card">', unsafe_allow_html=True)
+            st.subheader("Tín hiệu NLP của sản phẩm")
+            n_s = nlp[nlp["series_id"] == sel_sid]
+            asp_cols = [c for c in n_s.columns if c.startswith("asp_")]
+            if not n_s.empty and asp_cols:
+                asp_means = (n_s[asp_cols].mean() * 100).sort_values()
+                asp_df = pd.DataFrame(
+                    {"Khía cạnh": [c.replace("asp_", "").capitalize() for c in asp_means.index], "Tỉ lệ (%)": asp_means.values}
+                )
+                fig_asp = px.bar(
+                    asp_df,
+                    x="Tỉ lệ (%)",
+                    y="Khía cạnh",
+                    orientation="h",
+                    text=asp_df["Tỉ lệ (%)"].map(lambda v: f"{v:.1f}%"),
+                    color_discrete_sequence=["#0891B2"],
+                )
+                fig_asp.update_traces(textposition="outside")
+                fig_asp.update_layout(**PLOTLY_LAYOUT, xaxis_title="% Review nhắc tới", yaxis_title="", height=270)
+                st.plotly_chart(fig_asp, use_container_width=True)
+
+                pos_m = float(n_s["pos_ratio"].mean()) * 100
+                neg_m = float(n_s["neg_ratio"].mean()) * 100
+                sent_m = float(n_s["sent_mean"].mean())
+                st.caption(f"Cảm xúc TB: **{sent_m:+.2f}** • Tích cực: **{pos_m:.1f}%** • Tiêu cực: **{neg_m:.1f}%**")
+            else:
+                st.info("Không có dữ liệu NLP cho sản phẩm này.")
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        # Review tiêu biểu
+        st.markdown('<div class="section-card">', unsafe_allow_html=True)
+        st.subheader("Review tiêu biểu (trích từ `review_samples.parquet`)")
+        r_s = reviews[reviews["series_id"] == sel_sid].copy()
+        if r_s.empty:
+            st.info("Không có mẫu review cho sản phẩm này.")
+        else:
+            rev_filter = st.radio("Lọc cảm xúc", ["Tất cả", "Tích cực (pos)", "Tiêu cực (neg)"], horizontal=True)
+            if rev_filter == "Tích cực (pos)":
+                r_s = r_s[r_s["label"] == "pos"]
+            elif rev_filter == "Tiêu cực (neg)":
+                r_s = r_s[r_s["label"] == "neg"]
+
+            asp_r_cols = [c for c in r_s.columns if c.startswith("asp_")]
+            rc1, rc2 = st.columns(2)
+            for idx_r, (_, rr) in enumerate(r_s.head(8).iterrows()):
+                lbl = str(rr.get("label", "pos"))
+                badge_txt = f"{'Pos' if lbl == 'pos' else 'Neg'} • sent {float(rr.get('sent', 0)):+.2f}"
+                stars = "★" * int(round(float(rr.get("rating", 5))))
+                chips = "".join(
+                    f'<span class="asp-chip">#{c.replace("asp_", "")}</span>'
+                    for c in asp_r_cols
+                    if rr.get(c, 0) == 1
+                )
+                card_html = f"""
+                <div class="rev-card {lbl}">
+                    <div class="rev-meta">
+                        <span class="rev-badge {lbl}">{badge_txt}</span>
+                        <span>{stars} • {int(rr.get('helpful_vote', 0))} helpful</span>
+                    </div>
+                    <div class="rev-title">{str(rr.get('title', ''))[:120]}</div>
+                    <div class="rev-text">{str(rr.get('text', ''))[:320]}</div>
+                    <div>{chips}</div>
+                </div>
+                """
+                (rc1 if idx_r % 2 == 0 else rc2).markdown(card_html, unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+# -----------------------------------------------------------------------------
+# TAB 3: THÍ NGHIỆM ABLATION & V1 -> V2
+# -----------------------------------------------------------------------------
+with tab_ablation:
+    abl_df = results.get("ablation_mase", pd.DataFrame())
+    if not abl_df.empty:
+        st.markdown('<div class="section-card">', unsafe_allow_html=True)
+        st.subheader("Biểu đồ Ablation (Test MASE theo bộ đặc trưng F0 → F4)")
+        m_col = abl_df.columns[0]
+        fs_cols = [c for c in ["F0", "F1", "F2", "F3", "F4"] if c in abl_df.columns]
+        abl_m = abl_df.melt(id_vars=m_col, value_vars=fs_cols, var_name="Bộ đặc trưng", value_name="MASE")
+        fig_abl = px.bar(
+            abl_m,
+            x=m_col,
+            y="MASE",
+            color="Bộ đặc trưng",
+            barmode="group",
+            color_discrete_sequence=["#4F46E5", "#818CF8", "#0891B2", "#14B8A6", "#059669"],
+        )
+        ens_df = results.get("metrics_ensemble", pd.DataFrame())
+        if not ens_df.empty and "MA4" in ens_df["model"].values:
+            ma4_val = float(ens_df.loc[ens_df["model"] == "MA4", "MASE"].iloc[0])
+            fig_abl.add_hline(y=ma4_val, line_dash="dash", line_color="#D97706", annotation_text=f"MA4 ({ma4_val:.3f})")
+        fig_abl.update_layout(**PLOTLY_LAYOUT, xaxis_title="", yaxis_title="Test MASE", height=380)
+        st.plotly_chart(fig_abl, use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    t1, t2 = st.columns(2)
+    with t1:
+        st.markdown('<div class="section-card">', unsafe_allow_html=True)
+        st.subheader("So sánh cải thiện v1 → v2 (`v1_vs_v2.csv`)")
+        v12 = results.get("v1_vs_v2", pd.DataFrame())
+        if not v12.empty:
+            st.dataframe(v12, use_container_width=True, hide_index=True)
+        else:
+            st.info("Chưa có file `v1_vs_v2.csv`.")
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    with t2:
+        st.markdown('<div class="section-card">', unsafe_allow_html=True)
+        st.subheader("Kiểm định Wilcoxon (`significance.csv`)")
+        sig_df = results.get("significance", pd.DataFrame())
+        if not sig_df.empty:
+            st.dataframe(sig_df, use_container_width=True, hide_index=True)
+        else:
+            st.info("Chưa có file `significance.csv`.")
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    comp_df = results.get("model_comparison", pd.DataFrame())
+    if not comp_df.empty:
+        st.markdown('<div class="section-card">', unsafe_allow_html=True)
+        c_head, c_dl = st.columns([3, 1])
+        with c_head:
+            st.subheader("Bảng tổng hợp toàn bộ mô hình (`model_comparison.csv`)")
+        with c_dl:
+            st.download_button(
+                "Tải CSV kết quả",
+                data=comp_df.to_csv(index=False).encode("utf-8-sig"),
+                file_name="model_comparison.csv",
+                mime="text/csv",
+                use_container_width=True,
+            )
+        st.dataframe(comp_df, use_container_width=True, hide_index=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+# -----------------------------------------------------------------------------
+# TAB 4: PHÂN TÍCH NLP & MẬT ĐỘ REVIEW
+# -----------------------------------------------------------------------------
+with tab_nlp:
+    vol_df = results.get("volume_split", pd.DataFrame())
+    n_left, n_right = st.columns([1.4, 1.0])
+
+    with n_left:
+        st.markdown('<div class="section-card">', unsafe_allow_html=True)
+        st.subheader("Tác động NLP theo mật độ review (Nhiều vs Ít review)")
+        if not vol_df.empty:
+            delta_cols = [c for c in vol_df.columns if "MASE %" in c]
+            if delta_cols:
+                fig_vol = px.bar(
+                    vol_df,
+                    x="model",
+                    y=delta_cols[0],
+                    color="group",
+                    barmode="group",
+                    color_discrete_sequence=["#059669", "#E11D48"],
+                )
+                fig_vol.add_hline(y=0, line_color="#64748B", line_width=1)
+                fig_vol.update_layout(
+                    **PLOTLY_LAYOUT,
+                    xaxis_title="",
+                    yaxis_title="Δ MASE F2→F4 (% — âm là NLP cải thiện)",
+                    height=350,
+                )
+                st.plotly_chart(fig_vol, use_container_width=True)
+        else:
+            st.info("Chưa có file `volume_split.csv`.")
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    with n_right:
+        st.markdown('<div class="section-card">', unsafe_allow_html=True)
+        st.subheader("Tần suất 7 khía cạnh NLP toàn tập")
+        asp_cols = [c for c in nlp.columns if c.startswith("asp_")]
+        if asp_cols:
+            g_asp = (nlp[asp_cols].mean() * 100).sort_values()
+            g_df = pd.DataFrame(
+                {"Khía cạnh": [c.replace("asp_", "").capitalize() for c in g_asp.index], "Tỉ lệ (%)": g_asp.values}
+            )
+            fig_g = px.bar(
+                g_df,
+                x="Tỉ lệ (%)",
+                y="Khía cạnh",
+                orientation="h",
+                text=g_df["Tỉ lệ (%)"].map(lambda v: f"{v:.1f}%"),
+                color_discrete_sequence=["#4F46E5"],
+            )
+            fig_g.update_traces(textposition="outside")
+            fig_g.update_layout(**PLOTLY_LAYOUT, xaxis_title="% Trung bình theo tuần", yaxis_title="", height=350)
+            st.plotly_chart(fig_g, use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    if not vol_df.empty:
+        st.markdown('<div class="section-card">', unsafe_allow_html=True)
+        st.subheader("Bảng chi tiết phân tích theo lượng review (`volume_split.csv`)")
+        st.dataframe(vol_df, use_container_width=True, hide_index=True)
+        st.markdown("</div>", unsafe_allow_html=True)
