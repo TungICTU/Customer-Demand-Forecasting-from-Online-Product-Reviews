@@ -19,7 +19,7 @@ import streamlit as st
 from plotly.subplots import make_subplots
 
 DATA = Path(os.environ.get("APP_DATA", Path(__file__).parent / "app_data"))
-st.set_page_config(page_title="Demand forecasting from reviews", page_icon="📈", layout="wide")
+st.set_page_config(page_title="Customer Demand Forecasting from Reviews", layout="wide")
 
 GREY, BLUE, RED, ORANGE = "#5f6368", "#1a73e8", "#d93025", "#e37400"
 ASPECT_NAMES = {"asp_quality": "Quality", "asp_durability": "Durability", "asp_value": "Value for money",
@@ -74,7 +74,7 @@ labels = sorted(pred["label"].unique(), key=lambda s: (s.count("·") == 0, s))
 
 
 # ----------------------------------------------------------------------------- sidebar
-st.sidebar.title("📈 Demand from reviews")
+st.sidebar.title("Customer Demand Forecasting from Reviews")
 page = st.sidebar.radio("Page", ["Forecast", "Reviews & sentiment", "Model results", "About"])
 
 st.sidebar.markdown("---")
@@ -107,7 +107,7 @@ if page == "Forecast":
     product_header()
     c1, c2 = st.columns([3, 1])
     with c2:
-        choose = st.multiselect("Forecasts to show", labels,
+        choose = st.multiselect("Forecasts model", labels,
                                 default=[l for l in [default_main, "GRU · F4", "MA4"] if l in labels])
         h = st.radio("Forecast horizon (weeks ahead)", [1, 2, 3, 4], horizontal=True)
         hist_weeks = st.slider("History shown (weeks)", 26, 208, 78, step=13)
@@ -128,7 +128,7 @@ if page == "Forecast":
                                  line=dict(color=palette[i % len(palette)], width=1.6,
                                            dash="dot" if "·" not in lab else "solid")))
     fig.update_layout(height=430, margin=dict(l=10, r=10, t=30, b=10), hovermode="x unified",
-                      yaxis_title="verified reviews / week (demand proxy)",
+                      yaxis_title="verified reviews / week",
                       legend=dict(orientation="h", y=-0.15))
     with c1:
         st.plotly_chart(fig, width="stretch")
@@ -141,7 +141,7 @@ if page == "Forecast":
            .sort_values("MAE"))
     k1, k2, k3, k4 = st.columns(4)
     recent = w[w["week"] < test_start].tail(8)["n_verified"].mean()
-    k1.metric("Avg demand, last 8 weeks before test", f"{recent:.1f} / week")
+    k1.metric("Avg demand (Last 8 weeks before test)", f"{recent:.1f} / week")
     if default_main in tbl.index and "MA4" in tbl.index:
         k2.metric(f"MAE · {default_main}", f"{tbl.loc[default_main, 'MAE']:.2f}",
                   f"{(tbl.loc[default_main, 'MAE'] / tbl.loc['MA4', 'MAE'] - 1) * 100:+.1f}% vs MA4",
@@ -268,23 +268,23 @@ elif page == "Model results":
 else:
     st.subheader("About this project")
     st.markdown(f"""
-**Question:** do signals extracted from customer reviews (NLP) improve weekly demand forecasts?
+**Question:** Do signals extracted from customer reviews (NLP) improve weekly demand forecasts?
 
-**Data:** Amazon Reviews 2023 (McAuley Lab, UCSD) — 5 categories, {products['series_id'].nunique()} products,
-weekly series {weekly['week'].min().date()} → {weekly['week'].max().date()}.
+**Data:** Amazon Reviews 2023 (McAuley Lab, UCSD, in 5 categories, {products['series_id'].nunique()} products,
+weekly series from {weekly['week'].min().date()} to {weekly['week'].max().date()}.
 Demand proxy = verified-purchase reviews per week.
 
 **Pipeline**
-1. *Data preparation* — select products with dense review histories, build weekly series.
-2. *NLP* — RoBERTa sentiment for every review (checked against star ratings), 7 aspects
+1. *Data preparation*: select products with dense review histories, build weekly series.
+2. *NLP*: RoBERTa sentiment for every review (checked against star ratings), 7 aspects
    (quality, durability, value, shipping, ease of use, compatibility, gift) via sentence embeddings,
    aggregated per week.
-3. *Forecasting* — 26 weeks in → 4 weeks out; baselines (Naive, Seasonal Naive, MA4), Ridge, LightGBM,
+3. *Forecasting*: 26 weeks in → 4 weeks out; baselines (Naive, Seasonal Naive, MA4), Ridge, LightGBM,
    LSTM, GRU, Transformer as global models; feature ablation F0 → F4; per-window normalisation (v2).
-4. *Evaluation* — time-based split (train ≤ {meta.get('train_end', '2021-12')}, validation to
+4. *Evaluation*: time-based split (train ≤ {meta.get('train_end', '2021-12')}, validation to
    {meta.get('val_end', '2022-06')}, test after); MASE, WAPE, Wilcoxon tests.
 
-**Main findings:** all models beat MA4 after per-window normalisation; demand history alone gives the
+**Main findings:** All models beat MA4 after per-window normalisation; demand history alone gives the
 best average accuracy; NLP features reduce large errors and help in review-rich categories, but do not
 improve average scaled error.
 """)
