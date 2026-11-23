@@ -218,7 +218,7 @@ elif page == "Model results":
     if abl is not None:
         sets = [c for c in ["F0", "F1", "F2", "F3", "F4"] if c in abl.columns]
         fig = go.Figure()
-        shades = ["#1a73e8", "#b0b3b8", "#9aa0a6", "#80868b", "#5f6368"]
+        shades = ["#1a73e8", "#29ff34", "#edff4c", "#ff9317", "#ff2b2b"]
         for s_, col in zip(sets, shades):
             fig.add_trace(go.Bar(x=abl.index, y=abl[s_], name=s_, marker_color=col))
         if ens is not None and (ens["model"] == "MA4").any():
